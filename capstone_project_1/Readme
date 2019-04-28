@@ -3,4 +3,6 @@
 Boston Fire Incident Type Classification
 
 This project is to analyze and classify Boston Fire Incident Type. It can help Boston Fire Department to optimize their operational 
-efficiency
+efficiency.
+
+The data comes from [here] (https://data.boston.gov/dataset/fire-incident-reporting). 
