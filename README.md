@@ -1,4 +1,4 @@
-# This fold contains the projects I completed in Springboard. #
+# Projects completed in Springboard. #
 
 There are two types of projects:
 
