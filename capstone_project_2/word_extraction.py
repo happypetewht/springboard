@@ -19,50 +19,59 @@ import os
 import matplotlib.pylab as plt
 import spacy
 from nltk.stem import PorterStemmer
-from spacy.lang.en import STOP_WORDS
 from sklearn.feature_extraction.text import TfidfVectorizer
-#   from word2vec import W2VModelDownload
-#  from word2vec import Word2Vec
+import re
+import word2vec
+import string
 
 class text_cleaning:
   #Cleaning the texts
   
-  def __init__(self, df):
-    self.df = df
+  punct_regex = re.compile('([%s])' % (string.punctuation + '‘’'))
+  spaces_regex = re.compile(r'\s{2,}')
+  number_regex = re.compile(r'\d+')
+  
+  def __init__(self, string):
+    self.string = string
     
   def remove_nonalpha(self):
     # lower the words, remove non-alphabetic words and extra blanks
-    self.df['abstract'] = self.df['abstract'].str.replace("[^A-Za-z]", " ").str.lower()
-    self.df['abstract'] = self.df['abstract'].str.replace("\\s+", " ")
-    return self.df
+    preprocessed = self.string.replace('\'', '')
+    preprocessed = preprocessed.lower()
+    preprocessed = self.punct_regex.sub(' ', preprocessed)
+    preprocessed = self.number_regex.sub('_NUMBER_', preprocessed)    
+    
+    return preprocessed
   
   def remove_stopword(self):
     # remove the stopwords
-    
+    from spacy.lang.en import STOP_WORDS
     spacy_stopwords = STOP_WORDS
-    self.df = self.remove_nonalpha()
-    self.df['abstract'] = self.df['abstract'].apply(lambda x: ' '.join([word for word in x.split() if word not in spacy_stopwords]))
-    return self.df
+    
+    return ' '.join([word for word in self.string.split() if word not in spacy_stopwords])
 
   
   def lemma_word(self):
     # lemmatize the words
     nlp = spacy.load('en_core_web_sm')
-    self.df = self.remove_stopword()
-    self.df['lemma_abstract'] = self.df['clean_abstract'].apply(lambda x: ' '.join([token.lemma_ for token in nlp(x)]))
-    return self.df
+    
+    return ' '.join([token.lemma_ for token in nlp(self.string)])
   
   def stem_word(self):
     # stem the words 
     stemmer = PorterStemmer()
-    self.df = self.lemma_word()
-    self.df['stem_abstract'] = self.df['lemma_abstract'].apply(lambda x: ' '.join([stemmer.stem(token) for token in x.split()]))
-    return self.df
+    
+    return ' '.join([stemmer.stem(token) for token in self.string.split()])
 
-  def key_words_tfidf(self, column):
-    # Extract the key words by using tfidf and bigram
+class word_extraction_tfidf:
+  # extract the key words by using tfidf and bigram
+  
+  def __init__(self, df):
+    self.df = df
+    
+  def key_words(self, column):
     # Use the tfidf to find top 10 words appearing in the seed patents. 
-    # We assume those patents would include more synonyms to "purify water" or "filter water"
+    #We assume those patents would include more synonyms to "purify water" or "filter water"
     tfidf = TfidfVectorizer(ngram_range=(1, 2))
     weights = tfidf.fit_transform(self.df[column])
     score = zip(tfidf.get_feature_names(),
@@ -70,15 +79,22 @@ class text_cleaning:
     df_score = pd.DataFrame(score, columns=['feature', 'weight'])
     
     df_score['length'] = df_score['feature'].apply(lambda x: len(x.split()))
-    top_feature = df_score[df_score['length'] == 2][['feature', 'weight']].sort_values(by='weight', ascending=False).head(10)
-    return top_feature['feature'].tolist()
+    df_score[df_score['length'] == 2][['feature', 'weight']].sort_values(by='weight', ascending=False).head(10)
+    return df_score['feature'].tolist()
 
-  def key_words_word2vec(self, bq_project, string, top_number=10):
-    # extract the key words by using Word2Vec trained by Google Patents. 
-    # Before running this program,  please include word2vec.py in your folder. 
-    # You can download here: https://github.com/google/patents-public-data/blob/master/models/landscaping/word2vec.py
-    # the model is stored here: https://console.cloud.google.com/storage/browser/patent_landscapes
-    # use the pretrained model with 5.9 million pretrained model 
+class word_extraction_word2vec:
+  from word2vec import W2VModelDownload
+  from word2vec import Word2Vec
+  # extract the key words by using Word2Vec trained by Google Patents. 
+  # Before running this program,  please include word2vec.py in your folder. 
+  # You can download here: https://github.com/google/patents-public-data/blob/master/models/landscaping/word2vec.py
+  # the model is stored here: https://console.cloud.google.com/storage/browser/patent_landscapes
+  
+  def __init__(self, bq_project):
+    self.bq_project = bq_project
+        
+  def key_words(self, string, top_number=10):
+  # use the pretrained model with 5.9 million pretrained model 
     model_name = '5.9m'
     model_download = W2VModelDownload(bq_project)
     model_download.download_w2v_model('patent_landscapes', model_name)
